@@ -2,39 +2,79 @@ import altair as alt
 import numpy as np
 import pandas as pd
 import streamlit as st
+import yfinance as yf 
+import datetime
+from utils import * 
 
-"""
-# Welcome to Streamlit!
+min_date = datetime.date(1990, 1, 2)
+today = datetime.date.today()
 
-Edit `/streamlit_app.py` to customize this app to your heart's desire :heart:.
-If you have any questions, checkout our [documentation](https://docs.streamlit.io) and [community
-forums](https://discuss.streamlit.io).
+start_date = st.date_input(
+  label = "Start Date", 
+  min_value = min_date, 
+  max_value = today,
+  value = today - datetime.timedelta(days = 18*31)
+)
 
-In the meantime, below is an example of what you can do with just a few lines of code:
-"""
+end_date = st.date_input(
+  label = "End Date", 
+  min_value = min_date, 
+  max_value = today, 
+  value = today - datetime.timedelta(days = 1)
+)
 
-num_points = st.slider("Number of points in spiral", 1, 10000, 1100)
-num_turns = st.slider("Number of turns in spiral", 1, 300, 31)
+def date_filter_format(date): 
+    return "-".join([str(date.year), str(date.month), str(date.day)])
 
-indices = np.linspace(0, 1, num_points)
-theta = 2 * np.pi * num_turns * indices
-radius = indices
+start_date_cleaned = date_filter_format(start_date) 
+end_date_cleaned = date_filter_format(end_date) 
 
-x = radius * np.cos(theta)
-y = radius * np.sin(theta)
+# Define the labels for your checkboxes
+checkbox_labels = get_checkbox_column_labels()
+tickers = get_sector_etf_tickers() 
 
-df = pd.DataFrame({
-    "x": x,
-    "y": y,
-    "idx": indices,
-    "rand": np.random.randn(num_points),
-})
+########################## Plotting Sector ETFs ##########################
 
-st.altair_chart(alt.Chart(df, height=700, width=700)
-    .mark_point(filled=True)
-    .encode(
-        x=alt.X("x", axis=None),
-        y=alt.Y("y", axis=None),
-        color=alt.Color("idx", legend=None, scale=alt.Scale()),
-        size=alt.Size("rand", legend=None, scale=alt.Scale(range=[1, 150])),
-    ))
+
+
+##################### Check Boxes to Include in Opt ######################
+
+# Create a dictionary to hold the status of each checkbox
+checkbox_status = {}
+
+# Create a 4-column layout
+col1, col2, col3, col4 = st.columns(4)
+
+# Use a list to store your columns
+columns = [col1, col2, col3, col4]
+
+# Loop through each column and place three checkboxes in each,
+# also storing their status in the checkbox_status dictionary
+for i, col in enumerate(columns):
+    with col:
+        for label in checkbox_labels[i]:
+            # Creating a checkbox and storing its return value
+            if label == "": 
+                continue
+            else: 
+                checkbox_status[label] = st.checkbox(label)
+
+to_pull = [label.split(" ")[0] for label, status in checkbox_status.items() if status]
+indices_to_pull = {label: i for i, label in enumerate(to_pull)}
+
+historical_data = [] 
+
+st.write(to_pull)
+
+for ticker in to_pull: 
+    df_ticker = yf.download(tickers=[ticker], start=start_date_cleaned, end=end_date_cleaned).reset_index()
+    historical_data.append((ticker, df_ticker[["Date", "Close"]])) 
+
+if to_pull is not None: 
+    chart = alt.Chart(historical_data[indices_to_pull["XLU"]][1]).mark_line(color='red').encode(
+        x='Date',
+        y="Close",
+        tooltip=['Date', 'Close']
+    )
+    st.altair_chart(chart, use_container_width=True)
+
